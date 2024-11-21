@@ -46,6 +46,7 @@ struct Process RRFindProcessToExecute(struct Process readyQueue[]);
 void RRUpdateReadyQueue(struct Process readyQueue[], struct Process processToMoveBack);
 int FindProcessIndexByID(struct Process tableToSearch[], int size, int id);
 void BubbleSortByArrivalTime(struct Process arr[], int size);
+void RRUpdateOutputProcessValue(struct Process outputTable[], struct Process readyQueue[], int time, struct Process processToExecute, int* averageWaitingTime, int* averageTurnaroundTime, int* averageResponseTime);
 
 void PreemptivePriorityScheduling(struct Process table[], int size);
 struct Process PPSFindProcessToExecute(struct Process processes[], int size, int time);
@@ -53,7 +54,7 @@ struct Process PPSFindProcessToExecute(struct Process processes[], int size, int
 // Overall Helper Functions
 void CopyToTable(struct Process table[], struct Process tableToCopy[], int size);
 bool IsProcessEmpty(struct Process processes[], int size);
-void UpdateFinalProcessValue(struct Process outputTable[], struct Process processTable[], int time, struct Process processToExecute, int* averageWaitingTime, int* averageTurnaroundTime, int* averageResponseTime);
+void UpdateOutputProcessValue(struct Process outputTable[], struct Process processTable[], int time, struct Process processToExecute, int* averageWaitingTime, int* averageTurnaroundTime, int* averageResponseTime);
 void OutputTable(struct Process outputTable[], int size, int averageWaitingTime, int averageTurnaroundTime, int averageResponseTime, int totalTime);
 
 int main(int argc, char* argv[]) {
@@ -94,7 +95,7 @@ int main(int argc, char* argv[]) {
     {
         printf("Process %d -> Arrival Time: %d, Burst Time: %d, Priority: %d\n", processTable[i].processID, processTable[i].arrivalTime, processTable[i].burstTime, processTable[i].priority);
     }
-    RoundRobin(processTable, amountOfProcess);
+    FirstComeFirstServe(processTable, amountOfProcess);
 }
 
 void FirstComeFirstServe(struct Process table[], int size) {
@@ -134,7 +135,7 @@ void FirstComeFirstServe(struct Process table[], int size) {
         time += processToExecute.burstTime;
         printf("|P_%d T -> %d|", processToExecute.processID, time);
 
-        UpdateFinalProcessValue(outputTable, processes, time, processToExecute, &averageWaitingTime, &averageTurnaroundTime, &averageResponseTime);
+        UpdateOutputProcessValue(outputTable, processes, time, processToExecute, &averageWaitingTime, &averageTurnaroundTime, &averageResponseTime);
 
         isDone = IsProcessEmpty(processes, size);
     }
@@ -144,6 +145,7 @@ void FirstComeFirstServe(struct Process table[], int size) {
 
 struct Process FCFSFindProcessToExecute(struct Process processes[], int size, int time) {
     struct Process toExecute = createProcess(-1, 100, -1, -1);
+    int index = -1;
     for(int i = 0; i < size; i++)
     {
         if(processes[i].processID == -1) // Valid Process
@@ -155,6 +157,25 @@ struct Process FCFSFindProcessToExecute(struct Process processes[], int size, in
         if(processes[i].burstTime <= 0) // Not already done process
             continue;
 
+        if (processes[i].arrivalTime < toExecute.arrivalTime)
+        {
+            toExecute = processes[i];
+            index = i;
+            continue;
+        }
+        else
+        {
+            if (processes[i].processID < toExecute.processID)
+            {
+                toExecute = processes[i];
+                index = i;
+                continue;
+            }
+        }
+    }
+    if (index != -1)
+    {
+        processes[index] = createProcess(-1, -1, -1, -1);
     }
     return toExecute;
 }
@@ -196,7 +217,7 @@ void ShortestTimeRemainingFirst(struct Process table[], int size) {
         processes[processToExecute.processID - 1].burstTime -= 1;
         if(processes[processToExecute.processID - 1].burstTime == 0)
         {
-            UpdateFinalProcessValue(outputTable, processes, time, processToExecute, &averageWaitingTime, &averageTurnaroundTime, &averageResponseTime);
+            UpdateOutputProcessValue(outputTable, processes, time, processToExecute, &averageWaitingTime, &averageTurnaroundTime, &averageResponseTime);
         }
         isDone = IsProcessEmpty(processes, size);
     }
@@ -259,6 +280,12 @@ void RoundRobin(struct Process table[], int size) {
     struct Process outputTable[size];
     CopyToTable(outputTable, table, size);
 
+    int processOriginalBurstTime[size];
+    for(int i = 0; i < size; i++)
+    {
+        processOriginalBurstTime[i] = processes[i].burstTime;
+    }
+
     struct Process readyQueue[size];
     for(int i = 0; i < size; i++)
     {
@@ -297,16 +324,22 @@ void RoundRobin(struct Process table[], int size) {
         else
         {
             time += processToExecute.burstTime;
-            processToExecute.burstTime -= processToExecute.burstTime;
             printf("|P_%d Time -> %d|", processToExecute.processID, time);
+            int index = processToExecute.processID - 1;
+            printf("%d\n", index);
+            processToExecute.burstTime = processOriginalBurstTime[index];
+            RRUpdateOutputProcessValue(outputTable, readyQueue, time, processToExecute, &averageWaitingTime, &averageTurnaroundTime, &averageResponseTime);
             RRUpdateReadyQueue(readyQueue, createProcess(-1, -1, -1, -1));
         }
         isDone = IsProcessEmpty(processes, size) && IsProcessEmpty(readyQueue, size);
     }
+    printf("\n------------------------------------------------------------------------------------------------\n");
+    OutputTable(outputTable, size, averageWaitingTime, averageTurnaroundTime, averageResponseTime, time);
 }
 
 void RRFillInReadyQueue(struct Process processes[], struct Process readyQueue[], int size, int time) {
     struct Process processesToStore[size];
+    // Initializes processesToStore table
     for(int i = 0; i < size; i++)
     {
         processesToStore[i] = createProcess(-1, -1, -1, -1);
@@ -315,6 +348,12 @@ void RRFillInReadyQueue(struct Process processes[], struct Process readyQueue[],
     for(int i = 0, j = 0; i < size; i++)
     {
         if(processes[i].processID == -1) // Valid Process
+            continue;
+
+        if(processes[i].arrivalTime > time) // Is in RQ
+            continue;
+
+        if(processes[i].burstTime <= 0) // Not already done process
             continue;
 
         if(processes[i].arrivalTime <= time)
@@ -326,8 +365,7 @@ void RRFillInReadyQueue(struct Process processes[], struct Process readyQueue[],
     }
 
     BubbleSortByArrivalTime(processesToStore, size);
-
-    for(int i = 0, j = 0; i < size; i++)
+    for(int i = 0, j = 0; i < size; NULL)
     {
         if(processesToStore[i].processID == -1)
             break;
@@ -338,6 +376,8 @@ void RRFillInReadyQueue(struct Process processes[], struct Process readyQueue[],
             continue;
         }
         readyQueue[j] = processesToStore[i];
+        ++j;
+        ++i;
     }
 }
 
@@ -348,8 +388,7 @@ struct Process RRFindProcessToExecute(struct Process readyQueue[]) {
 void RRUpdateReadyQueue(struct Process readyQueue[], struct Process processToMoveBack) {
     bool isDone = false;
     int index = 0;
-    while(!isDone)
-    {
+    while(!isDone) {
         if(readyQueue[index + 1].processID == -1)
         {
             readyQueue[index] = processToMoveBack;
@@ -359,6 +398,7 @@ void RRUpdateReadyQueue(struct Process readyQueue[], struct Process processToMov
         readyQueue[index] = readyQueue[index + 1];
         index++;
     }
+
 }
 
 int FindProcessIndexByID(struct Process tableToSearch[], int size, int id) {
@@ -385,6 +425,29 @@ void BubbleSortByArrivalTime(struct Process arr[], int size) {
             }
         }
     }
+}
+
+void RRUpdateOutputProcessValue(struct Process outputTable[], struct Process readyQueue[], int time, struct Process processToExecute, int* averageWaitingTime, int* averageTurnaroundTime, int* averageResponseTime) {
+    int CT = time;
+    int TAT = CT - processToExecute.arrivalTime;
+    int WT = TAT - processToExecute.burstTime;
+    int RT = readyQueue[0].initialTime - processToExecute.arrivalTime;
+    struct Process newInfo = {processToExecute.processID,
+                              processToExecute.arrivalTime,
+                              processToExecute.burstTime,
+                              CT,
+                              TAT,
+                              WT,
+                              RT,
+                              processToExecute.initialTime,
+                              false,
+                              processToExecute.priority};
+
+    outputTable[newInfo.processID - 1] = newInfo;
+
+    *averageWaitingTime += WT;
+    *averageTurnaroundTime += TAT;
+    *averageResponseTime += RT;
 }
 
 void PreemptivePriorityScheduling(struct Process table[], int size) {
@@ -424,7 +487,7 @@ void PreemptivePriorityScheduling(struct Process table[], int size) {
         processes[processToExecute.processID - 1].burstTime -= 1;
         if(processes[processToExecute.processID - 1].burstTime == 0)
         {
-            UpdateFinalProcessValue(outputTable, processes, time, processToExecute, &averageWaitingTime, &averageTurnaroundTime, &averageResponseTime);
+            UpdateOutputProcessValue(outputTable, processes, time, processToExecute, &averageWaitingTime, &averageTurnaroundTime, &averageResponseTime);
         }
         isDone = IsProcessEmpty(processes, size);
     }
@@ -497,7 +560,7 @@ void CopyToTable(struct Process table[], struct Process tableToCopy[], int size)
     }
 }
 
-void UpdateFinalProcessValue(struct Process outputTable[], struct Process processTable[], int time, struct Process processToExecute, int* averageWaitingTime, int* averageTurnaroundTime, int* averageResponseTime) {
+void UpdateOutputProcessValue(struct Process outputTable[], struct Process processTable[], int time, struct Process processToExecute, int* averageWaitingTime, int* averageTurnaroundTime, int* averageResponseTime) {
     int CT = time;
     int TAT = CT - processToExecute.arrivalTime;
     int WT = TAT - processToExecute.burstTime;
