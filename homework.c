@@ -95,10 +95,14 @@ int main(int argc, char* argv[]) {
     {
         printf("Process %d -> Arrival Time: %d, Burst Time: %d, Priority: %d\n", processTable[i].processID, processTable[i].arrivalTime, processTable[i].burstTime, processTable[i].priority);
     }
-
+    printf("\nFCFS\n");
+    FirstComeFirstServe(processTable, amountOfProcess);
+    printf("\nSTRF\n");
+    ShortestTimeRemainingFirst(processTable, amountOfProcess);
     printf("\nRound Robin\n");
     RoundRobin(processTable, amountOfProcess);
-
+    printf("\nPPS\n");
+    PreemptivePriorityScheduling(processTable, amountOfProcess);
 }
 
 void FirstComeFirstServe(struct Process table[], int size) {
@@ -296,8 +300,8 @@ void RoundRobin(struct Process table[], int size) {
         processOriginalBurstTime[i] = processes[i].burstTime;
     }
 
-    struct Process readyQueue[size];
-    for(int i = 0; i < size; i++)
+    struct Process readyQueue[size + 1];
+    for(int i = 0; i < size + 1; i++)
     {
         readyQueue[i] = createProcess(-1, -1, -1, -1);
     }
@@ -400,17 +404,20 @@ struct Process RRFindProcessToExecute(struct Process readyQueue[]) {
 void RRUpdateReadyQueue(struct Process readyQueue[], struct Process processToMoveBack, int size) {
     bool isDone = false;
     int index = 0;
+
     while(!isDone) {
-        if(readyQueue[index + 1].processID == -1 || index >= size)
+        if(readyQueue[index + 1].processID == -1)
         {
             readyQueue[index] = processToMoveBack;
             isDone = true;
             continue;
         }
+        if (index == size + 1)
+            break;
+
         readyQueue[index] = readyQueue[index + 1];
         index++;
     }
-
 }
 
 int FindProcessIndexByID(struct Process tableToSearch[], int size, int id) {
@@ -488,7 +495,7 @@ void PreemptivePriorityScheduling(struct Process table[], int size) {
     while(!isDone)
     {
         processToExecute = PPSFindProcessToExecute(processes, size, time);
-        if(processToExecute.processID == -1)
+        if(processToExecute.processID <= -1 || processToExecute.processID > 50)
         {
             ++time;
             printf("|");
