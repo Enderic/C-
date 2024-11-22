@@ -95,7 +95,8 @@ int main(int argc, char* argv[]) {
     {
         printf("Process %d -> Arrival Time: %d, Burst Time: %d, Priority: %d\n", processTable[i].processID, processTable[i].arrivalTime, processTable[i].burstTime, processTable[i].priority);
     }
-    FirstComeFirstServe(processTable, amountOfProcess);
+
+    RoundRobin(processTable, amountOfProcess);
 }
 
 void FirstComeFirstServe(struct Process table[], int size) {
@@ -297,13 +298,14 @@ void RoundRobin(struct Process table[], int size) {
 
     struct Process processToExecute = createProcess(-1, -1, -1, -1);
     printf("-------------------------------------------------------------------------------------------\n");
+    RRFillInReadyQueue(processes, readyQueue, size, time);
     while(!isDone)
     {
-        RRFillInReadyQueue(processes, readyQueue, size, time);
         processToExecute = RRFindProcessToExecute(readyQueue);
         if(processToExecute.processID == -1)
         {
             ++time;
+            RRFillInReadyQueue(processes, readyQueue, size, time);
             printf("|");
             continue;
         }
@@ -319,6 +321,7 @@ void RoundRobin(struct Process table[], int size) {
             time += timeQuantum;
             processToExecute.burstTime -= timeQuantum;
             printf("|P_%d Time -> %d|", processToExecute.processID, time);
+            RRFillInReadyQueue(processes, readyQueue, size, time);
             RRUpdateReadyQueue(readyQueue, processToExecute);
         }
         else
@@ -326,9 +329,9 @@ void RoundRobin(struct Process table[], int size) {
             time += processToExecute.burstTime;
             printf("|P_%d Time -> %d|", processToExecute.processID, time);
             int index = processToExecute.processID - 1;
-            printf("%d\n", index);
             processToExecute.burstTime = processOriginalBurstTime[index];
             RRUpdateOutputProcessValue(outputTable, readyQueue, time, processToExecute, &averageWaitingTime, &averageTurnaroundTime, &averageResponseTime);
+            RRFillInReadyQueue(processes, readyQueue, size, time);
             RRUpdateReadyQueue(readyQueue, createProcess(-1, -1, -1, -1));
         }
         isDone = IsProcessEmpty(processes, size) && IsProcessEmpty(readyQueue, size);
